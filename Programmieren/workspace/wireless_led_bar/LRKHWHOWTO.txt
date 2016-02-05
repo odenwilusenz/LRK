@@ -1,0 +1,61 @@
+LichtRöhrliKontroller v1.1 INSTRUCTION MANUAL
+
+relevant files:
+LRK.asm - assembler source for the slave side microcontroller
+LRK.hex - a ready compiled intel hex file ready to be flashed on the above mentioned controller, for your convenience.
+LRKmaster.ino - arduino sketch for the master side arduino
+LRKmaster.py - python script for communicating with the master side arduino
+LRKtest1.py - a simple test script that asks for colour values and sets them on selected slave devices
+LRKtest2.py - another simple test script that runs changing colour patterns on one selected slave device
+
+----------------------------------------------------------------------------------------------------------------------
+
+Slave device pinout:
+(female connector, rfmodule has the same pinout but male connector)
+-----------------------------------
+| gnd 1 2 vcc                     |
+|  ce 3 4 csn                     |
+| sck 5 6 mosi                    |
+|miso 7 8 irq                     |
+|                                 |
+|  0V 1 2 12V                     |
+|----------------------------------
+
+----------------------------------------------------------------------------------------------------------------------
+
+Arduino for programming the slave device:
+Arduino    Slave
+gnd     -> gnd
++5v     -> vcc
+d10     -> ce
+d11     -> mosi
+d12     -> miso
+d13     -> sck
+
+Load Examples->ArduinoISP on the Arduino, use avrdude to program the slave as follows:
+flashing the program code: 
+  avrdude -c arduino -p t44 -b 19200 -P <COMPORT> -U flash:w:lrk.hex
+setting the channel and address:
+  avrdude -c arduino -p t44 -b 19200 -P <COMPORT> -U eeprom:w:0xe7,<ROW>,<PLACE>,0xe7,0xe7,<CHANNEL>:m
+allowing higher clock frequency:
+  avrdude -c arduino -p t44 -b 19200 -P <COMPORT> -U lfuse:w:0xe2:m
+
+For example on linux Mint:
+  avrdude -c arduino -p t44 -b 19200 -P /dev/ttyUSB0 -U flash:w:lrk.hex
+  avrdude -c arduino -p t44 -b 19200 -P /dev/ttyUSB0 -U eeprom:w:0xe7,0xe7,0xe7,0xe7,0xe7,0x02:m
+  avrdude -c arduino -p t44 -b 19200 -P /dev/ttyUSB0 -U lfuse:w:0xe2:m
+
+----------------------------------------------------------------------------------------------------------------------
+
+Arduino as the master device:
+Arduino    rf-module
+gnd     -> gnd
++3.3v   -> vcc
+d6      -> irq
+d7      -> csn
+d8      -> ce
+d11     -> mosi
+d12     -> miso
+d13     -> sck
+
+Load LRKmaster.ino, have fun
