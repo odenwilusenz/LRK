@@ -43,11 +43,11 @@ class Protocol():
             encoded_frame=encoded_frame[:-1]#letztes trennzeichen entfernen
             encoded_frame+="#"#next Line code
         encoded_frame=encoded_frame[:-1]#letztes trennzeichen entfernen
-        print("total encoded frame",encoded_frame)
+        #print("total encoded frame",encoded_frame)
         return encoded_frame
     
     def decode(self,tcp_block):
-        print("trying to decode block",tcp_block)
+        #print("trying to decode block",tcp_block)
         matrix=self.new_grid.get_led_matrix()
         linesplit=tcp_block.split("#")
         #print("linesplit",linesplit)
@@ -66,7 +66,7 @@ class Protocol():
                 
             y+=1
         #TODO: validity checking for frame
-        print(matrix)
+        #print(matrix)
         return matrix
 
 
@@ -135,7 +135,7 @@ class SocketListenerThread(threading.Thread): #einfache messung
 
     def run(self):
         try:
-            print("SocketListenerThread started")
+            #print("SocketListenerThread started")
             while True:
                 #for single_socket in self.socket_list:
                 (clientsocket, address) = self.socket_list.accept()
@@ -154,11 +154,11 @@ class SocketListenerThread(threading.Thread): #einfache messung
                             self.my_queue.put(message)
                             break
                     if self.stop_requested==True:
-                        print("socket-thread stopping...")
+                        #print("socket-thread stopping...")
                         return
                         #TODO: ev hier keinen stop_requested austieg, da übertagung abgebrochen wird?
                 if self.stop_requested==True:
-                    print("socket-thread stopped")
+                    #print("socket-thread stopped")
                     return
                 #print "thread alive"
                 #time.sleep(0.1)
@@ -166,7 +166,7 @@ class SocketListenerThread(threading.Thread): #einfache messung
             print(traceback.format_exc())
     
     def stop(self):
-        print("stop thread")
+        #print("stop thread")
         self.stop_requested=True
 
 if __name__ == '__main__':     

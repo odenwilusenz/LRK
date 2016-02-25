@@ -2,10 +2,14 @@ import sys
 import queue
 import tkinter as tk
 import time
+import threading
+import traceback
 
 import led_logic
 import common_gui_components as gui_commons
 import tcp_Comunication
+
+import lrkmaster
 
 class Application(tk.Frame,gui_commons.UI):
     def __init__(self, master=None):
@@ -22,6 +26,13 @@ class Application(tk.Frame,gui_commons.UI):
         sock=tcp_Comunication.TCP_Socket(None)
         
         self.my_queue=sock.get_serversocket_queue(port=21000)
+        
+        self.led_queue=queue.Queue()
+        thread=PushOverToLedTread(self.led_queue)
+        thread.setDaemon(True)
+        thread.start()
+        
+        #self.lrk=lrkmaster.LRKmaster("/dev/ttyUSB0")
         
 #         print("test")
 #         time.sleep(2)
@@ -59,9 +70,26 @@ class Application(tk.Frame,gui_commons.UI):
     def update_preview(self):
         try:
             frame=self.my_queue.get_nowait()
-            print("got message via queue",frame)
+            #print("got message via queue",frame)
             new_grid=self.protocol.decode(frame)
             self.update_button_colors(new_grid)
+            
+            self.led_queue.put(new_grid)
+            
+            
+#             with lrkmaster.LRKmaster("/dev/ttyUSB0") as lrk:
+#                 x_list = [1,3,5,7,9,11,15,17,19,21,23]
+#                 for y in range(1,6):
+#                     for x in x_list:
+#                         try:
+#                             led1=new_grid[x-1][y-1].get_color()
+#                             led2=new_grid[x][y-1].get_color()
+#                             print("leds",x,y,led1,led2)
+#                             lrk.do(y, x, int(led1[0]*255), int(led1[1]*255), int(led1[2]*255), int(led2[0]*255), int(led2[1]*255), int(led2[2]*255))
+#                         except lrkmaster.LRKError:
+#                             print(("led module",x,y,"not responding"))
+                        
+                #self.lrk.do(row, place, r1, g1, b1, r2, g2, b2)            
 
         except queue.Empty:
             pass
@@ -110,6 +138,37 @@ class Application(tk.Frame,gui_commons.UI):
 #     def do_test2(self):
 #         print("bar")
 #         self.button_grid[5][2]["bg"]='#000000'
+
+
+class PushOverToLedTread(threading.Thread): #einfache messung
+    def __init__(self,input_queue,*args,**kwargs):
+        super(PushOverToLedTread,self).__init__()
+        self.input_queue=input_queue
+
+    def run(self):
+        try:
+            
+            with lrkmaster.LRKmaster("/dev/ttyUSB0") as lrk:
+  
+                while True:
+                
+                    #new_grid=self.input_queue.get_nowait()
+                    new_grid=self.input_queue.get()
+                
+                    x_list = [1,3,5,7,9,11,15,17,19,21,23]
+                    for y in range(1,6):
+                        for x in x_list:
+                            try:
+                                led1=new_grid[x-1][y-1].get_color()
+                                led2=new_grid[x][y-1].get_color()
+                                #print("leds",x,y,led1,led2)
+                                lrk.do(y, x, int(led1[0]*255), int(led1[1]*255), int(led1[2]*255), int(led2[0]*255), int(led2[1]*255), int(led2[2]*255))
+                            except lrkmaster.LRKError:
+                                print(("led module",x,y,"not responding"))
+
+        except:
+            print(traceback.format_exc())
+
 
 if __name__ == "__main__":
     root = tk.Tk()
