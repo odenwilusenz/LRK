@@ -49,49 +49,49 @@ class LRKmaster:
 
   def hello(self):
     self.ser.write(b'h')
-    hello = str.strip(self.ser.readline())
+    hello = str.strip(self.ser.readline().decode())
     if (hello != '1.1ok'):
-      raise LRKError('device identification failed. device returned ', hello, ' instead of 1.0ok')
+      raise LRKError('device identification failed. device returned ', hello, ' instead of 1.1ok')
     return
 
   def status(self):
     self.ser.write(b's')
-    return str.strip(self.ser.readline())
+    return str.strip(self.ser.readline().decode())
 
   def readReg(self, reg):
     self.ser.write(b'r')
-    self.ser.write(str(int(reg) % 256))
+    self.ser.write(str(int(reg) % 256).encode())
     self.ser.write(b'.')
-    return str.strip(self.ser.readline())
+    return str.strip(self.ser.readline().decode())
 
   def setRetry(self, interval, count):
     self.ser.write(b'm')
-    self.ser.write(str(int(interval) % 16))
+    self.ser.write(str(int(interval) % 16).encode())
     self.ser.write(b',')
-    self.ser.write(str(int(count) % 16))
+    self.ser.write(str(int(count) % 16).encode())
     self.ser.write(b'.')
-    if (str.strip(self.ser.readline()) != 'ok'):
+    if (str.strip(self.ser.readline().decode()) != 'ok'):
       raise LRKError('setting retry count failed')
     return
     
 
   def flushFifos(self):
     self.ser.write(b'f')
-    if (str.strip(self.ser.readline()) != 'ok'):
+    if (str.strip(self.ser.readline().decode()) != 'ok'):
       raise LRKError('flushing fifos failed')
     return
 
   def clearInterrupts(self):
     self.ser.write(b'q')
-    if (str.strip(self.ser.readline()) != 'ok'):
+    if (str.strip(self.ser.readline().decode()) != 'ok'):
       raise LRKError('clearing interrupts failed')
     return
 
   def channel(self, chan):
     self.ser.write(b'c')
-    self.ser.write(str(int(chan) % 256))
+    self.ser.write(str(int(chan) % 256).encode())
     self.ser.write(b'.')
-    if (str.strip(self.ser.readline()) != 'ok'):
+    if (str.strip(self.ser.readline().decode()) != 'ok'):
       raise LRKError('setting channel failed')
     return
 
@@ -99,11 +99,11 @@ class LRKmaster:
     rowstring = str(int(row) % 256)
     placestring = str(int(place) % 256)
     self.ser.write(b'a231,')
-    self.ser.write(rowstring)
+    self.ser.write(rowstring.encode())
     self.ser.write(b',')
-    self.ser.write(placestring)
-    self.ser.write(',231,231.')
-    if (str.strip(self.ser.readline()) != 'ok'):
+    self.ser.write(placestring.encode())
+    self.ser.write(b',231,231.')
+    if (str.strip(self.ser.readline().decode()) != 'ok'):
       raise LRKError('setting send address failed')
     self.lastaddress = (row,place)
     return
@@ -112,17 +112,17 @@ class LRKmaster:
     pl = pwmlist(r1, g1, b1, r2, g2, b2, calibration)
     self.ser.write(b'b')
     for v in pl[:-1]:
-      self.ser.write(str(v))
+      self.ser.write(str(v).encode())
       self.ser.write(b',')
     self.ser.write(b'1.')
-    if (str.strip(self.ser.readline()) != 'ok'):
+    if (str.strip(self.ser.readline().decode()) != 'ok'):
        raise LRKError('setting pwmlist buffer failed')
     self.lastcolour = (r1, g1, b1, r2, g2, b2)
     return
 
   def send(self):
     self.ser.write(b't')
-    reply = str.strip(self.ser.readline())
+    reply = str.strip(self.ser.readline().decode())
     if (reply != 'ok'):
        raise LRKError('sending failed with '+reply)
     return

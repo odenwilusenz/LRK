@@ -15,7 +15,7 @@ with lrkmaster.LRKmaster(sys.argv[1]) as lrk:
   c = [0,0,0,0,0,0] 
   cc = [0,0,0,0,0,0]
   while True:
-    cc = map(lambda x: random.randint(-1,1), cc)
+    cc = list(map(lambda x: random.randint(-1,1), cc))
     packets = 0
     resent = 0
     lost = 0
@@ -39,5 +39,5 @@ with lrkmaster.LRKmaster(sys.argv[1]) as lrk:
           c[i] = 255
         if (c[i] < -255):
           c[i] = -255
-    print 'packets sent: '+str(packets)+' - packets resent: '+str(resent)+'('+str((100*resent)/packets)+'%) - packets lost: '+str(lost)+'('+str((100*lost)/packets)+'%) - time: '+str(time.time()-timestamp)+'s'
+    print ('packets sent: '+str(packets)+' - packets resent: '+str(resent)+'('+str((100*resent)/packets)+'%) - packets lost: '+str(lost)+'('+str((100*lost)/packets)+'%) - time: '+str(time.time()-timestamp)+'s')
 
