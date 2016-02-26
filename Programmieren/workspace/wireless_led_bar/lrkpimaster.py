@@ -53,25 +53,30 @@ class LRK():
     request = [reg&0x1F] + [0x00] * len
     return self.spi.xfer(request)[1:]
 
-  def writeReg(self, reg, val):
-    self.spi.xfer([reg&0x1F|0x20] + val)
+  def writeReg(self, reg, vals):
+    self.spi.xfer([reg&0x1F|0x20] + vals)
     return
 
   def readPayload(self, len):
     request = [0x61] + [0x00] * len
     return self.spi.xfer(request)[1:]
     
-  def writePayload(self, val):
-    self.spi.xfer([0xA0] + val)
+  def writePayload(self, vals):
+    self.spi.xfer([0xA0] + vals)
     return
 
-  def writePayloadNoAck(self, val):
-    self.spi.xfer([0xB0] + val)
+  def writePayloadNoAck(self, vals):
+    self.spi.xfer([0xB0] + vals)
     return
 
   def reusePayload(self):
     self.spi.xfer([0xE3])
     return
+
+  def enableNoAck(self):
+    self.writeReg(0x1D, [0x01])
+    return
+
 
   def flushFifos(self):
     self.spi.xfer([0xE1])

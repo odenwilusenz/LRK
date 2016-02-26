@@ -5,7 +5,8 @@ import time
 addressMap = [1,3,5,7,9,11,15,17,19,21,23,25]
 
 with lrkpimaster.LRK() as lrk:
-  lrk.setRetry(0,0)
+  lrk.setRetry(15,15)
+  lrk.enableNoAck()
   packets = 0
   resent = 0
   lost = 0
@@ -19,7 +20,7 @@ with lrkpimaster.LRK() as lrk:
     for _ in range(12):
 #      if (not(lrk.do(row, addressMap[place],55,55,55,55,55,55))):
       lrk.setAddress(row, addressMap[place])
-      lrk.writePayload([249, 12, 251, 3, 1, 0, 1, 0, 1, 245, 6, 1, 0, 1])
+      lrk.writePayloadNoAck([249, 12, 251, 3, 1, 0, 1, 0, 1, 245, 6, 1, 0, 1])
       if (not(lrk.send())):
         lost += 1
       resent += lrk.readReg(8,1)[0]&0x0F
