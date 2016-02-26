@@ -65,6 +65,14 @@ class LRK():
     self.spi.xfer([0xA0] + val)
     return
 
+  def writePayloadNoAck(self, val):
+    self.spi.xfer([0xB0] + val)
+    return
+
+  def reusePayload(self):
+    self.spi.xfer([0xE3])
+    return
+
   def flushFifos(self):
     self.spi.xfer([0xE1])
     self.spi.xfer([0xE2])
