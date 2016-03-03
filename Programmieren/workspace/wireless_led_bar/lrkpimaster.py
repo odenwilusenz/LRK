@@ -100,9 +100,12 @@ class LRK():
     self.writeReg(0x0A,[0xE7,row,place,0xE7,0xE7])
     return
 
-  def setColour(self, r1, g1, b1, r2, g2, b2, calibration=True):
+  def setColour(self, r1, g1, b1, r2, g2, b2, ack=True, calibration=True):
     pl = pwmlist(r1, g1, b1, r2, g2, b2, calibration)
-    self.writePayload(pl)
+    if (ack):
+      self.writePayload(pl)
+    else:
+      self.writePayloadNoAck(pl)
     return
 
   def send(self):
@@ -117,9 +120,9 @@ class LRK():
       self.clearIRQs()
       return True
 
-  def do(self, row, place, r1, g1, b1, r2, g2, b2):
+  def do(self, row, place, r1, g1, b1, r2, g2, b2, ack=True, calibration=True):
     self.setAddress(row, place)
-    self.setColour(r1, g1, b1, r2, g2, b2)
+    self.setColour(r1, g1, b1, r2, g2, b2, ack, calibration)
     return self.send()
 
 
