@@ -1,7 +1,7 @@
 import sys
 
 import numpy as np
-import matplotlib.pyplot as plt
+#import matplotlib.pyplot as plt
 import random
 
 
@@ -183,6 +183,7 @@ class Worm():
     def __init__(self,grid):
         self.grid=grid
         self.tick_nr=0
+        self.momentan_color=[1,0,0]
     
     def initial(self):
         initial_tick=0
@@ -193,21 +194,36 @@ class Worm():
             
     def tick(self):
         tab=self.grid.get_led_matrix()
+        tick=tab[0][0].get_tick_nr()
+        #--head--
+        #print(((int(tick/26))%5)%2)
+        new_color=[]
+        for i in self.momentan_color:
+            x=i+(random.random()-0.5)/4
+            if x>1:
+                x=1
+            elif x<0:
+                x=0
+            new_color.append(x)
+        if (int(tick/26)%5)%2==0:
+            tab[(tick%26)][(int(tick/26))%5].set_color(new_color)
+        else:
+            tab[25-(tick%26)][(int(tick/26))%5].set_color(new_color)
+        self.momentan_color=new_color
+        #--tail--
         for x in range(len(tab)):
             for y in range(len(tab[x])):
-                tick=tab[x][y].get_tick_nr()
                 self.led_tick(tab[x][y],tick)
                 tab[x][y].set_tick_nr(tick+1)
         self.tick_nr+=1
         return self.grid
     
     def led_tick(self,led,tick):#rainboweffect for a single led
-        if led.get_color()==[0,0,0]:
-            rnd=random.randint(0,50)
-            if rnd==0:
-                led.set_color((1,1,1))
+        col=led.get_color()
+        if (col[0]>0)or(col[1]>0)or(col[2]>0):
+            led.shift_color([-0.01,-0.01,-0.01])      
         else:
-            led.shift_color([-0.2,-0.2,-0.2])
+            led.set_color((0,0,0))
 
         
 if __name__ == "__main__":

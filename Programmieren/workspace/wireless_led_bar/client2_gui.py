@@ -10,7 +10,7 @@ class Application(tk.Frame):
     def __init__(self, master=None):
         tk.Frame.__init__(self, master)
         self.grid()
-        x_size=24
+        x_size=26
         y_size=5
         
         self.active_painting_color=[0,0,0]
@@ -167,10 +167,10 @@ class Application(tk.Frame):
         if self.sending==True:
             msg=self.protocol.encode(new_grid)
             sock=tcp_Comunication.TCP_Socket(None)
-            res=sock.send_message(msg,21000)
+            res=sock.send_message(msg,21001)
            #print("answer form send_message:",res)
             
-        root.after(50, self.do_ticks)
+        root.after(500, self.do_ticks)
         
 if __name__ == "__main__":
     root = tk.Tk()

@@ -6,11 +6,12 @@ import time
 import led_logic
 import tcp_Comunication
 
+
 class Application(tk.Frame):
     def __init__(self, master=None):
         tk.Frame.__init__(self, master)
         self.grid()
-        x_size=24
+        x_size=26
         y_size=5
         
         
@@ -55,8 +56,13 @@ class Application(tk.Frame):
         self.button3.grid(row=2, column=x_size+1)
         self.button4 = tk.Button(self, text="Worm", fg="red",command=self.do_button4)
         self.button4.grid(row=3, column=x_size+1)
-        self.button5 = tk.Button(self, text="button5", fg="red",command=self.do_button5)
-        self.button5.grid(row=4, column=x_size+1)
+        
+        self.speed_field=tk.Entry(self, bd =2,width=10)
+        self.speed_field.insert(0,"200")
+        self.speed_field.grid(row=4, column=x_size+1)
+        
+        self.button5 = tk.Button(self, text="Stop Sending", fg="red",command=self.do_button5)
+        self.button5.grid(row=5, column=x_size+1)
 
         self.QUIT = tk.Button(self, text="QUIT", fg="red",command=root.destroy)
         self.QUIT.grid(row=9, column=x_size+1)
@@ -117,31 +123,35 @@ class Application(tk.Frame):
             self.update_button_colors(new_grid)
             msg=self.protocol.encode(new_grid)
             sock=tcp_Comunication.TCP_Socket(None)
-            res=sock.send_message(msg,21000)
+            res=sock.send_message(msg,21001)
         elif self.active_pattern==2:
             new_grid=self.rainbow2.tick()
             self.update_button_colors(new_grid)
             msg=self.protocol.encode(new_grid)
             sock=tcp_Comunication.TCP_Socket(None)
-            res=sock.send_message(msg,21000)
+            res=sock.send_message(msg,21001)
             #print("answer form send_message:",res)
         elif self.active_pattern==3:
             new_grid=self.sparkle.tick()
             self.update_button_colors(new_grid)
             msg=self.protocol.encode(new_grid)
             sock=tcp_Comunication.TCP_Socket(None)
-            res=sock.send_message(msg,21000)
+            res=sock.send_message(msg,21001)
             #print("answer form send_message:",res)
         elif self.active_pattern==4:
             new_grid=self.worm.tick()
             self.update_button_colors(new_grid)
+            msg=self.protocol.encode(new_grid)
+            sock=tcp_Comunication.TCP_Socket(None)
+            res=sock.send_message(msg,21001)
         elif self.active_pattern==5:
-            new_grid=self.sparkle.tick()
-            self.update_button_colors(new_grid)
+            pass
         else:
             print("unknown active_pattern")
         #root.after(50, self.do_ticks)
-        root.after(1000, self.do_ticks)
+        speed=int(self.speed_field.get())
+        root.after(speed, self.do_ticks)
+        
         
 if __name__ == "__main__":
     root = tk.Tk()

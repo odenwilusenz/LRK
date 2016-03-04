@@ -21,7 +21,7 @@ import led_logic
 #klasse zum en/decodieren des selbstdefinierten protkolls
 class Protocol():
     def __init__(self,parent,*args,**kwargs):
-        self.x_size=24
+        self.x_size=26
         self.y_size=5
         self.new_grid=led_logic.Grid(self.x_size,self.y_size)
     
@@ -76,12 +76,14 @@ class TCP_Socket():
     def __init__(self,parent,*args,**kwargs):
         self.thread_list=[]
         self.socket_list=[]
-    
+        #ip_address='localhost'
+        self.ip_address="10.248.4.150"
+        
     #sendet die Nachricht an den angegebenen lokalen Port.
     def send_message(self,message,port):
         try:
             s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)# create an INET, STREAMing socket
-            s.connect(('localhost', port))# now connect to the web server on port 80 - the normal http port
+            s.connect((self.ip_address, port))
             message+="#end#"
             s.sendall(message.encode())#end-marker für nachricht anhängen
             return True
@@ -107,7 +109,10 @@ class TCP_Socket():
     #Öffnet einene Serversocket und startet den SocketListenerThread. gibt die Queue zurück, auf der die Messenges liegen
     def _open_serversocket(self,port,max_connections=1):
         serversocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # create an INET, STREAMing socket
-        serversocket.bind(('localhost', port)) # bind the socket to a public host, and a well-known port
+        #serversocket.bind(('localhost', port)) # bind the socket to a public host, and a well-known port
+        #serversocket.bind((socket.gethostname(), port)) # bind the socket to a public host, and a well-known port
+        serversocket.bind(("", port)) # bind the socket to a public host, and a well-known port 
+        
         serversocket.listen(max_connections)
         
         my_queue=queue.Queue()
@@ -171,13 +176,13 @@ class SocketListenerThread(threading.Thread): #einfache messung
 
 if __name__ == '__main__':     
     sock=TCP_Socket(None)
-    my_queue=sock.get_serversocket_queue(port=21000)
+    my_queue=sock.get_serversocket_queue(port=21001)
     print("test")
     time.sleep(2)
-    res=sock.send_message("hallo welt#end#",21000)
+    res=sock.send_message("hallo welt#end#",21001)
     print("sent",res)
     time.sleep(2)
-    res=sock.send_message("hello again#end#",21000)
+    res=sock.send_message("hello again#end#",21001)
     print("sent",res)
     time.sleep(2)
     try:
