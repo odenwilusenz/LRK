@@ -1,17 +1,16 @@
-import rpyc
-import plumbum
+import lrkpimaster
 import sys
 import time
 
 addressMap = [1,3,5,7,9,11,15,17,19,21,23,25]
 
-with plumbum.SshMachine(sys.argv[1], sys.argv[2]) as sshmachine, rpyc.ssh_connect(sshmachine, int(sys.argv[3])) as conn:
-  lrk = conn.root
-  lrk.setRetry(0,0)
+with lrkpimaster.LRK() as lrk:
+  lrk.setRetry(15,15)
+  lrk.enableNoAck()
   packets = 0
   resent = 0
   lost = 0
-  row = int(sys.argv[4]) % 256
+  row = int(sys.argv[1]) % 256
   place = 0
   while True:
     place = 0
@@ -19,8 +18,10 @@ with plumbum.SshMachine(sys.argv[1], sys.argv[2]) as sshmachine, rpyc.ssh_connec
     lost = 0
     starttime = time.time()
     for _ in range(12):
-      if (not(lrk.do(row, addressMap[place],55,55,55,55,55,55))):
-      if (not(True)):
+#      if (not(lrk.do(row, addressMap[place],55,55,55,55,55,55))):
+      lrk.setAddress(row, addressMap[place])
+      lrk.writePayloadNoAck([249, 12, 251, 3, 1, 0, 1, 0, 1, 245, 6, 1, 0, 1])
+      if (not(lrk.send())):
         lost += 1
       resent += lrk.readReg(8,1)[0]&0x0F
       place += 1
