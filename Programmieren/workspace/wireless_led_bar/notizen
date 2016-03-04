@@ -1,0 +1,2 @@
+python3 lrktest3.py /dev/ttyUSB0 5
+
