@@ -23,12 +23,6 @@ class Application(tk.Frame):
         self.rainbow=led_logic.Rainbow(self.grid1)
         self.rainbow.horizontal_wave_initial()
         
-        self.grid2=led_logic.Grid(x_size,y_size)
-        self.sparkle=led_logic.Sparkle(self.grid2)
-        
-        self.grid3=led_logic.Grid(x_size,y_size)
-        self.worm=led_logic.Worm(self.grid3)
-        
         
         #--netzwerk initialisieren
         self.sock=tcp_Comunication.TCP_Socket(None)
@@ -46,19 +40,44 @@ class Application(tk.Frame):
                 self.button_grid[x][y]=but
                 #print(self.button_grid[x][y])
         
-        self.button1 = tk.Button(self, text="rot", fg="red",command=self.do_button1)
+        self.button1 = tk.Button(self, text="",command=self.do_button1)
         self.button1.grid(row=0, column=x_size+1)
-        self.button2 = tk.Button(self, text="grün", fg="green",command=self.do_button2)
+        self.button2 = tk.Button(self, text="",command=self.do_button2)
         self.button2.grid(row=1, column=x_size+1)
-        self.button3 = tk.Button(self, text="blau", fg="blue",command=self.do_button3)
+        self.button3 = tk.Button(self, text="",command=self.do_button3)
         self.button3.grid(row=2, column=x_size+1)
-        self.button4 = tk.Button(self, text="schwarz", fg="red",command=self.do_button4)
+        self.button4 = tk.Button(self, text="",command=self.do_button4)
         self.button4.grid(row=3, column=x_size+1)
-        self.button5 = tk.Button(self, text="send", fg="red",command=self.do_button5)
+        self.button5 = tk.Button(self, text="",command=self.do_button5)
         self.button5.grid(row=4, column=x_size+1)
+        
+        self.colorfield1=tk.Entry(self, bd =2,width=10)
+        self.colorfield1.insert(0,"1,0,0")
+        self.colorfield1.grid(row=0, column=x_size+2)
+        self.colorfield2=tk.Entry(self, bd =2,width=10)
+        self.colorfield2.insert(0,"0,1,0")
+        self.colorfield2.grid(row=1, column=x_size+2)
+        self.colorfield3=tk.Entry(self, bd =2,width=10)
+        self.colorfield3.insert(0,"0,0,1")
+        self.colorfield3.grid(row=2, column=x_size+2)
+        self.colorfield4=tk.Entry(self, bd =2,width=10)
+        self.colorfield4.insert(0,"0.5,0.5,0.5")
+        self.colorfield4.grid(row=3, column=x_size+2)
+        self.colorfield5=tk.Entry(self, bd =2,width=10)
+        self.colorfield5.insert(0,"0,0,0")
+        self.colorfield5.grid(row=4, column=x_size+2)
+        
+        self.do_button5()
+        self.do_button4()
+        self.do_button3()
+        self.do_button2()
+        self.do_button1()
+        
+        self.button_send = tk.Button(self, text="Start sending", fg="red",command=self.do_button_send)
+        self.button_send.grid(row=y_size+1, column=x_size+1)
 
         self.QUIT = tk.Button(self, text="QUIT", fg="red",command=root.destroy)
-        self.QUIT.grid(row=9, column=x_size+1)
+        self.QUIT.grid(row=y_size+2, column=x_size+1)
     
     def update_button_colors(self,grid):
         tab=grid.get_led_matrix()
@@ -83,40 +102,64 @@ class Application(tk.Frame):
             h="0"+h
         return h
     
+    def _string_to_rgb(self,string):
+        sub_str=string.split(",")
+        res=[]
+        for st in sub_str:
+            res.append(float(st))
+        return res[:3]
+    
     def add_button(self,x,y,color='#00F000'):
-        #butt = tk.Button(self,bg=color)
         butt = tk.Button(self,bg=color, command=lambda row=x, column=y: self.button_click(row, column))
-        #self.hi_there["text"] = "x"
-        #butt["command"] = self.say_hi
         butt.grid(row=y, column=x)
         return butt
     
     def button_click(self,x,y):
-        print("button_click",x,y)
+        #print("button_click",x,y)
         self.grid1.grid[x][y].set_color(self.active_painting_color)
-
-    
-    def say_hi(self):
-        print("hi there, everyone!")
-        
         
     def do_button1(self):
-        self.active_painting_color=[1,0,0]
+        x=self.colorfield1.get()
+        color=self._string_to_rgb(x)
+        self.active_painting_color=color
+        hex_string=self._rgb_to_hex(color)
+        self.button1["bg"]=hex_string
         
     def do_button2(self):
-        self.active_painting_color=[0,1,0]
+        x=self.colorfield2.get()
+        color=self._string_to_rgb(x)
+        self.active_painting_color=color
+        hex_string=self._rgb_to_hex(color)
+        self.button2["bg"]=hex_string
 
     def do_button3(self):
-        self.active_painting_color=[0,0,1]
+        x=self.colorfield3.get()
+        color=self._string_to_rgb(x)
+        self.active_painting_color=color
+        hex_string=self._rgb_to_hex(color)
+        self.button3["bg"]=hex_string
         
     def do_button4(self):
-        self.active_painting_color=[0,0,0]
-        
+        x=self.colorfield4.get()
+        color=self._string_to_rgb(x)
+        self.active_painting_color=color
+        hex_string=self._rgb_to_hex(color)
+        self.button4["bg"]=hex_string
+
     def do_button5(self):
+        x=self.colorfield5.get()
+        color=self._string_to_rgb(x)
+        self.active_painting_color=color
+        hex_string=self._rgb_to_hex(color)
+        self.button5["bg"]=hex_string
+      
+    def do_button_send(self):
         if self.sending==True:
             self.sending=False
+            self.button_send["text"]="Start sending"
         else:
             self.sending=True
+            self.button_send["text"]="Stop sending"
             
     def do_ticks(self):
         new_grid=self.grid1#.get_led_matrix()

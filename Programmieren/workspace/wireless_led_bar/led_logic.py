@@ -1,20 +1,9 @@
 import sys
 
 import numpy as np
-#import wx
 import matplotlib.pyplot as plt
 import random
-"""
-print("hallo welt")
-print(np.zeros(20))
-guess = input("Raten Sie: ")
-print("eingegebener input: ",guess)
-print(range(20))
-plt.figure(1)
-plt.plot((1,2,3),(1,2,3))
-plt.grid()
-plt.show()
-"""
+
 
 class Led():
     """einzelnes LED, respektive LED-Band"""

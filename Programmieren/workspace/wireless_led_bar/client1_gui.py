@@ -1,3 +1,5 @@
+#diverse farmuster
+
 import tkinter as tk
 import time
 
@@ -24,6 +26,9 @@ class Application(tk.Frame):
         self.grid3=led_logic.Grid(x_size,y_size)
         self.worm=led_logic.Worm(self.grid3)
         
+        self.grid4=led_logic.Grid(x_size,y_size)
+        self.rainbow2=led_logic.Rainbow(self.grid4)
+        self.rainbow2.diagonal_wave_initial()
         
         #--netzwerk initialisieren
         self.sock=tcp_Comunication.TCP_Socket(None)
@@ -42,9 +47,9 @@ class Application(tk.Frame):
                 self.button_grid[x][y]=but
                 #print(self.button_grid[x][y])
         
-        self.button1 = tk.Button(self, text="Rainbow", fg="red",command=self.do_button1)
+        self.button1 = tk.Button(self, text="Rainbow1", fg="red",command=self.do_button1)
         self.button1.grid(row=0, column=x_size+1)
-        self.button2 = tk.Button(self, text="send_test", fg="red",command=self.do_button2)
+        self.button2 = tk.Button(self, text="Rainbow2", fg="red",command=self.do_button2)
         self.button2.grid(row=1, column=x_size+1)
         self.button3 = tk.Button(self, text="Sparkle", fg="red",command=self.do_button3)
         self.button3.grid(row=2, column=x_size+1)
@@ -110,8 +115,11 @@ class Application(tk.Frame):
         elif self.active_pattern==1:
             new_grid=self.rainbow.tick()
             self.update_button_colors(new_grid)
+            msg=self.protocol.encode(new_grid)
+            sock=tcp_Comunication.TCP_Socket(None)
+            res=sock.send_message(msg,21000)
         elif self.active_pattern==2:
-            new_grid=self.rainbow.tick()
+            new_grid=self.rainbow2.tick()
             self.update_button_colors(new_grid)
             msg=self.protocol.encode(new_grid)
             sock=tcp_Comunication.TCP_Socket(None)
@@ -132,7 +140,8 @@ class Application(tk.Frame):
             self.update_button_colors(new_grid)
         else:
             print("unknown active_pattern")
-        root.after(50, self.do_ticks)
+        #root.after(50, self.do_ticks)
+        root.after(1000, self.do_ticks)
         
 if __name__ == "__main__":
     root = tk.Tk()
