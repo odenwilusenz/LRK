@@ -29,7 +29,8 @@
 .equ PWMCHB = 2
 .equ PWMMSKA = (1<<LEDB1)+(1<<LEDB2)+(1<<LEDG1)+(1<<LEDG2)
 .equ PWMMSKB = (1<<LEDR1)+(1<<LEDR2)
-.equ PACKETLEN = 2*PWMCHA+2*PWMCHB+2		;must be at least 8
+.equ DATAPLEN = 2*PWMCHA+2*PWMCHB+2		;must be at least 8
+.equ CTRLPLEN = 32
 
 .equ R_RX_PAYLOAD = 0b01100001
 .equ R_REGISTER_STATUS = 0b00000111
@@ -38,15 +39,21 @@
 .equ W_REGISTER_STATUS = 0b00100111
 .equ W_REGISTER_RX_PW_P0 = 0b00110001
 .equ W_REGISTER_RX_ADDR_P0 = 0b00101010
+.equ W_REGISTER_RX_PW_P1 = 0b00110010
+.equ W_REGISTER_RX_ADDR_P1 = 0b00101011
 .equ W_REGISTER_RF_CH = 0b00100101
 .equ FLUSH_RX = 0b11100010
 
 
 .DSEG
-.ORG 0x61	;the addresses of the buffers are highly magical and need to be left as is and the previous byte kept free too
-buffer0:	.BYTE PACKETLEN
-.ORG 0x9F	;the addresses of the buffers are highly magical and need to be left as is and the previous byte kept free too
-buffer1:	.BYTE PACKETLEN
+		.BYTE 1
+bufferc:	.BYTE CTRLPLEN
+.ORG 0x60	;the addresses of the buffers are highly magical and need to be left as is and the previous byte kept free too
+		.BYTE 1
+buffer0:	.BYTE DATAPLEN
+.ORG 0x9E	;the addresses of the buffers are highly magical and need to be left as is and the previous byte kept free too
+		.BYTE 1
+buffer1:	.BYTE DATAPLEN
 		.BYTE 128
 stack:		.BYTE 1
 
@@ -152,15 +159,15 @@ funkcheckloop:		ld r16,Y+
 funkfail:		ldi r30,(defaultred<<1)
 funkok:			
 			ldi r28,buffer1
-			ldi r16,PACKETLEN-1
+			ldi r16,DATAPLEN-1
 defcol_loop:		lpm r23,Z+
 			st Y+,r23
 			dec r16
 			brpl defcol_loop
 
 
-			ldi r16,5
-			ldi r26,buffer0+7
+			ldi r16,10
+			ldi r26,bufferc+12
 eereadloop:		out EEARH,r31
 			out EEARL,r16		;read rf-parameters stored on the eeprom
 			sbi EECR,EERE
@@ -169,26 +176,41 @@ eereadloop:		out EEARH,r31
 			dec r16
 			brpl eereadloop
 
-			ldi r16,W_REGISTER_RX_ADDR_P0	;write receive address to rf
+			ldi r16,W_REGISTER_RX_ADDR_P0	;write data pipe address to rf
 			st -X,r16
 			ldi r16,5
 			rcall spi_op
 
-			ldi r26, buffer0+5
+			ldi r26, bufferc+5
+			ldi r16,W_REGISTER_RX_ADDR_P1	;write control pipe address to rf
+			st X,r16
+			ldi r16,5
+			rcall spi_op
+
+			ldi r26, bufferc+10
 			ldi r16,W_REGISTER_RF_CH	;write channel number to rf
 			st X,r16
 			ldi r16,1
 			rcall spi_op
 
-			ldi r26, buffer0
-			ldi r16,PACKETLEN		;set receive pipe length
+			ldi r26, bufferc
+			ldi r16,DATAPLEN		;set data pipe length
 			st X,r16
 			ldi r16, W_REGISTER_RX_PW_P0
 			st -X,r16
 			ldi r16,1
 			rcall spi_op
 
-			ldi r26, buffer0
+			ldi r26, bufferc
+			ldi r16,CTRLPLEN		;set control pipe length
+			st X,r16
+			ldi r16, W_REGISTER_RX_PW_P1
+			st -X,r16
+			ldi r16,1
+			rcall spi_op
+
+
+			ldi r26, bufferc
 			ldi r16, 0b00001011	;set rf-module to power-on and RX mode
 			st X,r16
 			ldi r16, W_REGISTER_CONFIG
@@ -217,7 +239,7 @@ FOREVER:
 			dec r26
 			ldi r16,R_RX_PAYLOAD  ;read packet
 			st X,r16
-			ldi r16,PACKETLEN
+			ldi r16,DATAPLEN
 			rcall spi_op
 
 			mov r26,r23
