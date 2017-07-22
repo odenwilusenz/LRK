@@ -8,6 +8,44 @@
  */ 
 
 
+/*
+  Reg summary
+
+  r0, all interrupt handlers (saves SREG)
+  r1, 
+  r2, 
+  r3, 
+  r4, 
+  r5, 
+  r6, 
+  r7, 
+  r8, 
+  r9, 
+  r10, 
+  r11,
+  r12, 
+  r13, 
+  r14, 
+  r15, 
+  r16, mainloop, spi_op, init
+  r17, 
+  r18, 
+  r19, mainloop, spi_op
+  r20, spi_op
+  r21, spi_op
+  r22, all interrupt handlers (work reg)
+  r23, pwmlist pointer
+  r24, 
+  r25, 
+  r26 (Xl), mainloop, spi_op, init
+  r27 (Xh), mainloop, spi_op, init
+  r28 (Yl), timer0 compA, timer0 overflow, init
+  r29 (Yh), timer0 compA, timer0 overflow, init
+  r30 (Zl), timer0 compB, timer0 overflow, init
+  r31 (Zh), timer0 compB, timer0 overflow, init
+*/
+
+
 .INCLUDE "tn44Adef.inc"
 
 .equ LEDB1 = PORTA0
@@ -24,27 +62,34 @@
 .equ LEDR2 = PORTB2
 .equ CE = PORTB3
 
+.equ PORTA_DDR = (1<<LEDB1)+(1<<LEDB2)+(1<<LEDG1)+(1<<LEDG2)+(1<<SCK)+(0<<MISO)+(1<<MOSI)+(1<<CSN)
+.equ PORTA_UP =  (0<<LEDB1)+(0<<LEDB2)+(0<<LEDG1)+(0<<LEDG2)+(0<<SCK)+(1<<MISO)+(0<<MOSI)+(1<<CSN)
+
+.equ PORTB_DDR = (0<<IRQ)+(1<<LEDR1)+(1<<LEDR2)+(1<<CE)
+.equ PORTB_UP =  (1<<IRQ)+(0<<LEDR1)+(0<<LEDR2)+(0<<CE)
+
+
 .equ PRESCALER_MODE = 3
 
 .equ PWMCHA = 4
 .equ PWMCHB = 2
 .equ PWMMSKA = (1<<LEDB1)+(1<<LEDB2)+(1<<LEDG1)+(1<<LEDG2)
 .equ PWMMSKB = (1<<LEDR1)+(1<<LEDR2)
-.equ DATAPLEN = 2*PWMCHA+2*PWMCHB+2		;must be at least 8
+.equ DATAPLEN = 2*PWMCHA+2*PWMCHB+2		;must be at least 8 and smaller than CTRLPLEN
 .equ CTRLPLEN = 32
 
-.equ R_RX_PAYLOAD = 0b01100001
-.equ R_REGISTER_STATUS = 0b00000111
+.equ R_RX_PAYLOAD =          0b01100001
+.equ R_REGISTER_STATUS =     0b00000111
 .equ R_REGISTER_RX_ADDR_P0 = 0b00001010
-.equ W_REGISTER_CONFIG = 0b00100000
-.equ W_REGISTER_STATUS = 0b00100111
-.equ W_REGISTER_RX_PW_P0 = 0b00110001
+.equ W_REGISTER_CONFIG =     0b00100000
+.equ W_REGISTER_STATUS =     0b00100111
+.equ W_REGISTER_RX_PW_P0 =   0b00110001
 .equ W_REGISTER_RX_ADDR_P0 = 0b00101010
-.equ W_REGISTER_RX_PW_P1 = 0b00110010
+.equ W_REGISTER_RX_PW_P1 =   0b00110010
 .equ W_REGISTER_RX_ADDR_P1 = 0b00101011
-.equ W_REGISTER_RF_CH = 0b00100101
-.equ FLUSH_RX = 0b11100010
-
+.equ W_REGISTER_RF_CH =      0b00100101
+.equ FLUSH_RX =              0b11100010
+.equ RF_NOP =                0b11111111
 
 .DSEG
 .ORG 0x60	;the addresses of the buffers are highly magical and need to be left as is and the previous byte kept free too
@@ -98,7 +143,7 @@ USI_OVF_H:        ; USI Overflow Handler
 
 
 /* After reset initialze stack, pointers (XYZ), IO, interrupts and timer0
-   Mangels r16, r23 and pointers X and Y
+   Mangels r16, r23 and pointers X, Y and Z
    
    Starts timer0 to drive the PWM routine*/
 RESET_H:
@@ -111,14 +156,14 @@ RESET_H:
 			clr r29
 			clr r27
 
-			ldi r16, (1<<MISO)+(1<<CSN)
+			ldi r16, PORTA_UP
 			out PORTA, r16
-			ldi r16, (1<<LEDB1)+(1<<LEDB2)+(1<<LEDG1)+(1<<LEDG2)+(1<<SCK)+(1<<MOSI)+(1<<CSN)
+			ldi r16, PORTA_DDR
 			out DDRA, r16
 
-			ldi r16, (1<<IRQ)
+			ldi r16, PORTB_UP
 			out PORTB, r16
-			ldi r16, (1<<LEDR1)+(1<<LEDR2)+(1<<CE)
+			ldi r16, PORTB_DDR
 			out DDRB, r16
 
 			ldi r16, (1<<SE)
@@ -227,26 +272,44 @@ eereadloop:		out EEARH,r31
   Waits for interrupt, checks if there is a new packet to read,
   if yes, reads the packet, sets new values to the PWM routine and
   returns to wait
-  Mangels: X,Y,r16,r17
-           (Mangling Y and r17 happen only while timer0 is reset and stopped
-		    when I belive it is safe)*/
+  Mangels: X,r16,r19
+*/
 FOREVER:	
 			sleep
 			sbic PINB,IRQ
 			rjmp FOREVER
 
-			mov r26,r23
-			neg r26
-			dec r26
+                        ldi r16, RF_NOP  ;read status
+                        ldi r26, bufferc
+                        st  -X,r16
+                        clr r16
+                        rcall spi_op   ;leaves the last byte read on r19, no need to ld from mem
+                        andi r19, 0b00001110
+                        brne read_command
+
+read_data:              ldi r26, bufferc
 			ldi r16,R_RX_PAYLOAD  ;read packet
-			st X,r16
+			st  -X,r16
 			ldi r16,DATAPLEN
 			rcall spi_op
 
-			mov r26,r23
+                        ldi r16, DATAPLEN
+push_pwmlist:           ld  r19,-X
+                        push r19
+                        dec r16
+                        brne push_pwmlist
+                        ldi r16, DATAPLEN
+                        mov r26,r23
+                        neg r26
+pop_pwmlist:            pop r19
+                        st  X+,r19
+                        dec r16
+                        brne pop_pwmlist
+
 			neg r23			;point the PWM routines to the new pwmlist
 
-			ldi r16, 0b01110000	;clear IRQ
+                        ldi r26, bufferc
+			ldi r16, 0b01110000	;IRQs to clear
 			st X,r16
 			ldi r16, W_REGISTER_STATUS
 			st -X,r16
@@ -260,13 +323,27 @@ FOREVER:
 
 			rjmp FOREVER
 
+
+read_command:           ldi r26, bufferc
+			ldi r16, 0b01110000	;IRQs to clear
+			st X,r16
+			ldi r16, W_REGISTER_STATUS
+			st -X,r16
+			ldi r16,1
+			rcall spi_op
+
+			ldi r16, FLUSH_RX
+			st -X,r16
+			ldi r16,0
+			rcall spi_op
+
+                        rjmp FOREVER
+
 /*Timer0 Compare A Handler
-  Toggles the PWM A outputs given by the mask in r17
+  Toggles the PWM A outputs using the pointer Y as the PWM A list
   Sets the next event time and output mask if needed
-  Requires: A bitmask of the PWM A outputs to toggle in r17
-            A pointer to the current position of PWM A list in Y
-  Returns: A new bitmask of the PWM A outputs to toggle next in r17
-           A new pointer to the new position of PWM A list in Y
+  Requires: A pointer to the current position of PWM A list in Y
+  Returns: A new pointer to the new position of PWM A list in Y
   Mangels: r0, r22
 */
 TIM0_COMPA_H:
@@ -279,12 +356,10 @@ TIM0_COMPA_H:
 			out SREG,r0
 			reti
 /*Timer0 Compare B Handler
-  Toggles the PWM B outputs given by the mask in r18
+  Toggles the PWM B outputs using the pointer Z as the PWM B list
   Sets the next event time and output mask if needed
-  Requires: A bitmask of the PWM B outputs to toggle in r18
-            A pointer to the current position of PWM B list in Z
-  Returns: A new bitmask of the PWM B outputs to toggle next in r18
-           A new pointer to the new position of PWM B list in Z
+  Requires: A pointer to the current position of PWM B list in Z
+  Returns: A new pointer to the new position of PWM B list in Z
   Mangels: r0, r22
 */
 TIM0_COMPB_H:
