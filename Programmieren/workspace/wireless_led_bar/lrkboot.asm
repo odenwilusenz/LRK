@@ -28,21 +28,21 @@
   r14, 
   r15, 
   r16, mainloop, spi_op, init
-  r17, 
-  r18, 
+  r17,
+  r18, mainloop
   r19, mainloop, spi_op
   r20, spi_op
   r21, spi_op
   r22, all interrupt handlers (work reg)
-  r23, pwmlist pointer
+  r23,
   r24, 
   r25, 
-  r26 (Xl), mainloop, spi_op, init
-  r27 (Xh), mainloop, spi_op, init
-  r28 (Yl), timer0 compA, timer0 overflow, init
-  r29 (Yh), timer0 compA, timer0 overflow, init
-  r30 (Zl), timer0 compB, timer0 overflow, init
-  r31 (Zh), timer0 compB, timer0 overflow, init
+  r26 (Xl), init
+  r27 (Xh), init
+  r28 (Yl), init
+  r29 (Yh), init
+  r30 (Zl), init, mainloop, spi_op
+  r31 (Zh), init, mainloop, spi_op
 */
 
 
@@ -62,48 +62,70 @@
 .equ LEDR2 = PORTB2
 .equ CE = PORTB3
 
+.equ IRQ_PCMSKREG = PCMSK1
+.equ IRQ_PCIE = PCIE1
+.equ IRQ_PCINT = PCINT8
+
 .equ PORTA_DDR = (1<<LEDB1)+(1<<LEDB2)+(1<<LEDG1)+(1<<LEDG2)+(1<<SCK)+(0<<MISO)+(1<<MOSI)+(1<<CSN)
 .equ PORTA_UP =  (0<<LEDB1)+(0<<LEDB2)+(0<<LEDG1)+(0<<LEDG2)+(0<<SCK)+(1<<MISO)+(0<<MOSI)+(1<<CSN)
 
 .equ PORTB_DDR = (0<<IRQ)+(1<<LEDR1)+(1<<LEDR2)+(1<<CE)
 .equ PORTB_UP =  (1<<IRQ)+(0<<LEDR1)+(0<<LEDR2)+(0<<CE)
 
+.equ WD_TIMEOUT = 7
+.equ WDP_BITS = (((WD_TIMEOUT & 8) << 2) | (WD_TIMEOUT & 7)) 
 
-.equ PRESCALER_MODE = 3
-
-.equ PWMCHA = 4
-.equ PWMCHB = 2
-.equ PWMMSKA = (1<<LEDB1)+(1<<LEDB2)+(1<<LEDG1)+(1<<LEDG2)
-.equ PWMMSKB = (1<<LEDR1)+(1<<LEDR2)
-.equ DATAPLEN = 2*PWMCHA+2*PWMCHB+2		;must be at least 8 and smaller than CTRLPLEN
-.equ CTRLPLEN = 32
-
+.equ R_REGISTER =            0b00000000
+.equ W_REGISTER =            0b00100000
 .equ R_RX_PAYLOAD =          0b01100001
-.equ R_REGISTER_STATUS =     0b00000111
-.equ R_REGISTER_RX_ADDR_P0 = 0b00001010
-.equ W_REGISTER_CONFIG =     0b00100000
-.equ W_REGISTER_STATUS =     0b00100111
-.equ W_REGISTER_RX_PW_P0 =   0b00110001
-.equ W_REGISTER_RX_ADDR_P0 = 0b00101010
-.equ W_REGISTER_RX_PW_P1 =   0b00110010
-.equ W_REGISTER_RX_ADDR_P1 = 0b00101011
-.equ W_REGISTER_RF_CH =      0b00100101
+.equ W_TX_PAYLOAD =          0b10100000
+.equ FLUSH_TX =              0b11100001
 .equ FLUSH_RX =              0b11100010
+.equ REUSE_TX_PL =           0b11100011
+.equ R_RX_PL_WID =           0b01100000
+.equ W_ACK_PAYLOAD =         0b10101000
+.equ W_TX_PAYLOAD_NO_ACK =   0b10110000
 .equ RF_NOP =                0b11111111
 
+.equ CONFIG =      0x00
+.equ EN_AA =       0x01
+.equ EN_RXADDR =   0x02
+.equ SETUP_AW =    0x03
+.equ SETUP_RETR =  0x04
+.equ RF_CH =       0x05
+.equ RF_SETUP =    0x06
+.equ STATUS =      0x07
+.equ OBSERVE_TX =  0x08
+.equ RPD =         0x09
+.equ RX_ADDR_P0 =  0x0A
+.equ RX_ADDR_P1 =  0x0B
+.equ RX_ADDR_P2 =  0x0C
+.equ RX_ADDR_P3 =  0x0D
+.equ RX_ADDR_P4 =  0x0E
+.equ RX_ADDR_P5 =  0x0F
+.equ TX_ADDR =     0x10
+.equ RX_PW_P0 =    0x11
+.equ RX_PW_P1 =    0x12
+.equ RX_PW_P2 =    0x13
+.equ RX_PW_P3 =    0x14
+.equ RX_PW_P4 =    0x15
+.equ RX_PW_P5 =    0x16
+.equ FIFO_STATUS = 0x17
+.equ DYNPD =       0x1C
+.equ FEATURE =     0x1D
+
+
+
+
 .DSEG
-.ORG 0x60	;the addresses of the buffers are highly magical and need to be left as is and the previous byte kept free too
-		.BYTE 1
-buffer0:	.BYTE DATAPLEN
-		.BYTE 1
-bufferc:	.BYTE CTRLPLEN
-.ORG 0x9E	;the addresses of the buffers are highly magical and need to be left as is and the previous byte kept free too
-		.BYTE 1
-buffer1:	.BYTE DATAPLEN
-		.BYTE 128
+.ORG 0x60
+                .BYTE 47
 stack:		.BYTE 1
+                .BYTE 1
+bufferc:	.BYTE 32
 
 .CSEG
+                        ;Interrupt vectors
 			rjmp   RESET_H          ; Reset Handler
 			rjmp   INT0_H           ; IRQ0 Handler
 			rjmp   PCINT0_H         ; PCINT0 Handler
@@ -122,9 +144,16 @@ stack:		.BYTE 1
 			rjmp   USI_STR_H        ; USI STart Handler
 			rjmp   USI_OVF_H        ; USI Overflow Handler
 
+                        ;RF recieve pipe widths
+PW_TABLE:               .DB 32,1,1,1,1
 
-defaultgreen:		.DB 128,(1<<LEDG2),0,0,0,0,0,0,0,0,0,0,0,0
-defaultred:		.DB 0,0,0,0,0,0,0,0,0,0,(1<<LEDR2),0,0,0
+                        ;RF receive pipe callback vectors
+PIPE_CB_VECT:           rjmp   INIT
+                        rjmp   PIPE1_CB
+                        rjmp   PIPE2_CB
+                        rjmp   PIPE3_CB
+                        rjmp   PIPE4_CB
+                        rjmp   PIPE5_CB
 
 INT0_H:           ; IRQ0 Handler
 PCINT0_H:         ; PCINT0 Handler
@@ -134,6 +163,9 @@ TIM1_CAPT_H:      ; Timer1 Capture Handler
 TIM1_COMPA_H:     ; Timer1 Compare A Handler
 TIM1_COMPB_H:     ; Timer1 Compare B Handler
 TIM1_OVF_H:       ; Timer1 Overflow Handler
+TIM0_COMPA_H:
+TIM0_COMPB_H:
+TIM0_OVF_H:
 ANA_COMP_H:       ; Analog Comparator Handler
 ADC_CONV_H:       ; ADC Conversion Handler
 EE_RDY_H:         ; EEPROM Ready Handler
@@ -141,7 +173,49 @@ USI_STR_H:        ; USI STart Handler
 USI_OVF_H:        ; USI Overflow Handler
 			reti
 
+PIPE1_CB:               sbi PORTA,LEDB1
+                        sbi PORTA,LEDB2
+                        cbi PORTA,LEDG1
+                        cbi PORTA,LEDG2
+                        cbi PORTB,LEDR1
+                        cbi PORTB,LEDR2
+                        ret
+PIPE2_CB:               sbi PORTA,LEDB1
+                        sbi PORTA,LEDB2
+                        sbi PORTA,LEDG1
+                        sbi PORTA,LEDG2
+                        cbi PORTB,LEDR1
+                        cbi PORTB,LEDR2
+                        ret
+PIPE3_CB:               cbi PORTA,LEDB1
+                        cbi PORTA,LEDB2
+                        sbi PORTA,LEDG1
+                        sbi PORTA,LEDG2
+                        sbi PORTB,LEDR1
+                        sbi PORTB,LEDR2
+                        ret
+PIPE4_CB:               sbi PORTA,LEDB1
+                        cbi PORTA,LEDB2
+                        sbi PORTA,LEDG1
+                        cbi PORTA,LEDG2
+                        sbi PORTB,LEDR1
+                        cbi PORTB,LEDR2
+                        ret
+PIPE5_CB:               cbi PORTA,LEDB1
+                        sbi PORTA,LEDB2
+                        cbi PORTA,LEDG1
+                        sbi PORTA,LEDG2
+                        cbi PORTB,LEDR1
+                        sbi PORTB,LEDR2
+                        ret
 
+
+INIT:
+                        ret
+
+
+
+.ORG 0x600
 /* After reset initialze stack, pointers (XYZ), IO, interrupts and timer0
    Mangels r16, r23 and pointers X, Y and Z
    
@@ -151,6 +225,15 @@ RESET_H:
 			out SPH, r16
 			ldi r16, LOW(stack)
 			out SPL, r16
+
+                        ldi r16, 0
+                        out MCUSR, r16
+
+                        ldi r16, (0<<WDIF|0<<WDIE|0<<WDP3|1<<WDCE|1<<WDE|0<<WDP2|0<<WDP1|0<<WDP0)
+                        out WDTCSR, r16
+
+                        ldi r16, (0<<WDIF|0<<WDIE|0<<WDCE|0<<WDE|WDP_BITS)
+                        out WDTCSR, r16
 
 			clr r31
 			clr r29
@@ -171,100 +254,170 @@ RESET_H:
 			ldi r16, (1<<PRUSI)+(1<<PRADC)
 			out PRR, r16
 
-			ldi r16, (1<<PCIE1)
+			ldi r16, (1<<IRQ_PCIE)
 			out GIMSK, r16
-			ldi r16, (1<<PCINT8)
-			out PCMSK1, r16
+			ldi r16, (1<<IRQ_PCINT)
+			out IRQ_PCMSKREG, r16
 
-			ldi r16, (1<<TOIE0)+(1<<OCIE0A)+(1<<OCIE0B)
-			out TIMSK0, r16		;enable the PWM interrupts
-			ldi r16, PRESCALER_MODE
-			out TCCR0B, r16		;start the timer and PWM routine
-
-
-			ldi r26, buffer0-1
-			ldi r16, R_REGISTER_RX_ADDR_P0
-			st X,r16
+			ldi r30, bufferc-1
+			ldi r16, R_REGISTER + RX_ADDR_P0
+			st Z,r16
 			ldi r16,5
 			rcall spi_op
 
-			ldi r30,(defaultgreen<<1)
-			ldi r28, buffer0-1
+
+                        sbi PORTB,LEDR1
+                        sbi PORTB,LEDR2
+                        sbi PORTA,LEDG1
+                        sbi PORTA,LEDG2
+			ldi r28, bufferc-1
 			ld r16,Y+
 			cpi r16,0b00001110
 			brne funkfail
-			ldi r23,3
+			ldi r23,5
 funkcheckloop:		ld r16,Y+
 			cpi r16,0xE7
 			brne funkfail
 			dec r23
-			brpl funkcheckloop
-			ld r16,Y
-			cpi r16,0xE7
-			breq funkok
-funkfail:		ldi r30,(defaultred<<1)
-funkok:			
-			ldi r28,buffer1
-			ldi r16,DATAPLEN-1
-defcol_loop:		lpm r23,Z+
-			st Y+,r23
-			dec r16
-			brpl defcol_loop
+			brne funkcheckloop
+                        cbi PORTB,LEDR1
+                        cbi PORTB,LEDR2
+                        rjmp funkok
+funkfail:		cbi PORTA,LEDG1
+                        cbi PORTA,LEDG2
+funkok:
+
+			ldi r30,bufferc
+                        ldi r16,0b00111111
+                        st  Z,r16
+			ldi r16,W_REGISTER + EN_RXADDR   ;enable all rf pipes
+			st -Z,r16
+			ldi r16,1
+			rcall spi_op
+
+			ldi r30,bufferc
+                        ldi r16,1
+                        st  Z,r16
+			ldi r16,W_REGISTER + SETUP_AW   ;set rf address width to 3 bytes
+			st -Z,r16
+			ldi r16,1
+			rcall spi_op
 
 
-			ldi r16,10
-			ldi r26,bufferc+12
-eereadloop:		out EEARH,r31
-			out EEARL,r16		;read rf-parameters stored on the eeprom
+			ldi r16,2
+eereadloop:		out EEARL,r16		;read rf-parameters stored on the eeprom
 			sbi EECR,EERE
 			in r23,EEDR
-			st -X,r23
+			push r23
 			dec r16
 			brpl eereadloop
 
-			ldi r16,W_REGISTER_RX_ADDR_P0	;write data pipe address to rf
-			st -X,r16
-			ldi r16,5
-			rcall spi_op
-
-			ldi r26, bufferc+5
-			ldi r16,W_REGISTER_RX_ADDR_P1	;write control pipe address to rf
-			st X,r16
-			ldi r16,5
-			rcall spi_op
-
-			ldi r26, bufferc+10
-			ldi r16,W_REGISTER_RF_CH	;write channel number to rf
-			st X,r16
+                        ldi r30,bufferc
+                        pop r16
+                        st Z,r16
+			ldi r16,W_REGISTER + RF_CH	;write channel number to rf
+			st -Z,r16
 			ldi r16,1
 			rcall spi_op
 
-			ldi r26, bufferc
-			ldi r16,DATAPLEN		;set data pipe length
-			st X,r16
-			ldi r16, W_REGISTER_RX_PW_P0
-			st -X,r16
+                        pop r18
+                        pop r17
+                        ldi r16,0xE7
+                        ldi r30,bufferc+2
+                        st  Z,r18
+                        st  -Z,r17
+                        st  -Z,r16
+			ldi r16,W_REGISTER + RX_ADDR_P0	;write control pipe address to rf
+			st -Z,r16
+			ldi r16,3
+			rcall spi_op
+
+                        ldi r16,0xC2
+                        ldi r30,bufferc+2
+                        st  Z,r18
+                        st  -Z,r17
+                        st  -Z,r16
+			ldi r16,W_REGISTER + RX_ADDR_P1	;write pipe1 address to rf
+			st -Z,r16
+			ldi r16,3
+			rcall spi_op
+
+
+
+                        ldi r30, bufferc
+			ldi r16,32		        ;set control pipe length
+			st Z,r16
+			ldi r16, W_REGISTER + RX_PW_P0
+			st -Z,r16
 			ldi r16,1
 			rcall spi_op
 
-			ldi r26, bufferc
-			ldi r16,CTRLPLEN		;set control pipe length
-			st X,r16
-			ldi r16, W_REGISTER_RX_PW_P1
-			st -X,r16
+/*
+                        ldi r30, bufferc
+			ldi r16,32		        ;set control pipe length
+			st Z,r16
+			ldi r16, W_REGISTER + RX_PW_P1
+			st -Z,r16
+			ldi r16,1
+			rcall spi_op
+*/
+
+
+                        ldi r30,PW_TABLE<<1
+                        lpm r16,Z
+                        ldi r30,bufferc
+                        st Z,r16
+			ldi r16,W_REGISTER + RX_PW_P1	;set pipe1 length
+			st -Z,r16
+			ldi r16,1
+			rcall spi_op
+
+                        ldi r30,(PW_TABLE<<1)+1
+                        lpm r16,Z
+                        ldi r30,bufferc
+                        st Z,r16
+			ldi r16,W_REGISTER + RX_PW_P2	;set pipe2 length
+			st -Z,r16
+			ldi r16,1
+			rcall spi_op
+
+                        ldi r30,(PW_TABLE<<1)+2
+                        lpm r16,Z
+                        ldi r30,bufferc
+                        st Z,r16
+			ldi r16,W_REGISTER + RX_PW_P3	;set pipe3 length
+			st -Z,r16
+			ldi r16,1
+			rcall spi_op
+
+                        ldi r30,(PW_TABLE<<1)+3
+                        lpm r16,Z
+                        ldi r30,bufferc
+                        st Z,r16
+			ldi r16,W_REGISTER + RX_PW_P4	;set pipe4 length
+			st -Z,r16
+			ldi r16,1
+			rcall spi_op
+
+                        ldi r30,(PW_TABLE<<1)+4
+                        lpm r16,Z
+                        ldi r30,bufferc
+                        st Z,r16
+			ldi r16,W_REGISTER + RX_PW_P5	;set pipe5 length
+			st -Z,r16
 			ldi r16,1
 			rcall spi_op
 
 
-			ldi r26, bufferc
+			ldi r30, bufferc
 			ldi r16, 0b00001011	;set rf-module to power-on and RX mode
-			st X,r16
-			ldi r16, W_REGISTER_CONFIG
-			st -X,r16
+			st Z,r16
+			ldi r16, W_REGISTER + CONFIG
+			st -Z,r16
 			ldi r16,1
 			rcall spi_op
 
-			ldi r23, buffer1     ; set initial pwm list pointer
+                        rcall PIPE_CB_VECT
 
 			sei                   ; Enable interrupts
 
@@ -272,142 +425,79 @@ eereadloop:		out EEARH,r31
   Waits for interrupt, checks if there is a new packet to read,
   if yes, reads the packet, sets new values to the PWM routine and
   returns to wait
-  Mangels: X,r16,r19
+  Mangels: Z,r16,r18,r19,r20,r21
 */
-FOREVER:	
-			sleep
+FOREVER:	        sleep
 			sbic PINB,IRQ
 			rjmp FOREVER
 
-                        ldi r16, RF_NOP  ;read status
-                        ldi r26, bufferc
-                        st  -X,r16
+rf_op:                  ldi r16, RF_NOP  ;read status to get the current pipe number
+                        ldi r30, bufferc
+                        st  -Z,r16
                         clr r16
                         rcall spi_op   ;leaves the last byte read on r19, no need to ld from mem
+
                         andi r19, 0b00001110
-                        brne read_command
+                        breq control_command
+                        cpi r19,0x0E
+                        breq FOREVER
+                        
+                        lsr r19
+                        mov r18,r19           ;pipe number of the current pipe
+                        ldi r30,(PW_TABLE<<1)-1
+                        add r30,r18
+                        lpm r16,Z             ;get the width of the current pipe
 
-read_data:              ldi r26, bufferc
+                        ldi r30, bufferc
+			ldi r19,R_RX_PAYLOAD  ;read packet
+			st  -Z,r19
+			rcall spi_op
+
+                        ldi r30,PIPE_CB_VECT
+                        add r30,r18
+                        icall
+
+clear_irq:              ldi r30, bufferc
+			ldi r16, 0b01110000	;IRQs to clear
+			st Z,r16
+			ldi r16, W_REGISTER + STATUS
+			st -Z,r16
+			ldi r16,1
+			rcall spi_op
+
+                        rjmp rf_op
+
+control_command:           
+                        ldi r30, bufferc-1
 			ldi r16,R_RX_PAYLOAD  ;read packet
-			st  -X,r16
-			ldi r16,DATAPLEN
-			rcall spi_op
+			st  Z,r16
+			ldi r16,32              ;pipe width
+                        rcall spi_op
 
-                        ldi r16, DATAPLEN
-push_pwmlist:           ld  r19,-X
-                        push r19
-                        dec r16
-                        brne push_pwmlist
-                        ldi r16, DATAPLEN
-                        mov r26,r23
-                        neg r26
-pop_pwmlist:            pop r19
-                        st  X+,r19
-                        dec r16
-                        brne pop_pwmlist
+                        cbi PORTA,LEDG1
+                        cbi PORTA,LEDG2
+                        cbi PORTA,LEDB1
+                        cbi PORTA,LEDB2
+                        cbi PORTB,LEDR1
+                        cbi PORTB,LEDR2
+                        sbrs r19,0
+                        sbi PORTB,LEDR2
 
-			neg r23			;point the PWM routines to the new pwmlist
-
-                        ldi r26, bufferc
-			ldi r16, 0b01110000	;IRQs to clear
-			st X,r16
-			ldi r16, W_REGISTER_STATUS
-			st -X,r16
-			ldi r16,1
-			rcall spi_op
-
-			ldi r16, FLUSH_RX
-			st -X,r16
-			ldi r16,0
-			rcall spi_op
-
-			rjmp FOREVER
+                        rjmp clear_irq
 
 
-read_command:           ldi r26, bufferc
-			ldi r16, 0b01110000	;IRQs to clear
-			st X,r16
-			ldi r16, W_REGISTER_STATUS
-			st -X,r16
-			ldi r16,1
-			rcall spi_op
 
-			ldi r16, FLUSH_RX
-			st -X,r16
-			ldi r16,0
-			rcall spi_op
 
-                        rjmp FOREVER
-
-/*Timer0 Compare A Handler
-  Toggles the PWM A outputs using the pointer Y as the PWM A list
-  Sets the next event time and output mask if needed
-  Requires: A pointer to the current position of PWM A list in Y
-  Returns: A new pointer to the new position of PWM A list in Y
-  Mangels: r0, r22
-*/
-TIM0_COMPA_H:
-			in r0, SREG
-			ld r22, Y+
-			andi r22,PWMMSKA
-			out PINA, r22
-			ld r22, Y+
-			out OCR0A, r22
-			out SREG,r0
-			reti
-/*Timer0 Compare B Handler
-  Toggles the PWM B outputs using the pointer Z as the PWM B list
-  Sets the next event time and output mask if needed
-  Requires: A pointer to the current position of PWM B list in Z
-  Returns: A new pointer to the new position of PWM B list in Z
-  Mangels: r0, r22
-*/
-TIM0_COMPB_H:
-			in r0, SREG
-			ld r22, Z+
-			andi r22, PWMMSKB
-			out PINB, r22
-			ld r22, Z+
-			out OCR0B, r22
-			out SREG,r0
-			reti
-
-/* Timer0 Overflow Handler
-   Sets PWM outputs HIGH
-   Sets pointer Y to the beginning of the next PWM list A
-   Sets pointer Z to the beginning of the next PWM list B
-   Sets the first PWM event times and first output masks
-   Requires: Pointer to the next pair of PWM lists in r23
-   Returns: PWM list A in Y,
-            PWM list B in Z,
-   Mangles: r0, r22*/
-TIM0_OVF_H:
-			in r0, SREG
-			cbi PORTA, LEDB1
-			cbi PORTA, LEDB2
-			cbi PORTA, LEDG1
-			cbi PORTA, LEDG2
-			cbi PORTB, LEDR1
-			cbi PORTB, LEDR2
-			mov r28, r23
-			mov r30, r23
-			subi r30,-(2*PWMCHA+1)
-			ld r22, Y+
-			out OCR0A, r22
-			ld r22, Z+
-			out OCR0B, r22
-			out SREG,r0
-			reti
 
 /*SPI operations subroutine
-  Requires a pointer to the SPI transfer buffer in pointer X and
+  Requires a pointer to the SPI transfer buffer in pointer Z and
   transfer length - 1 in r16
   Returns: SPI operation response in the transfer buffer
-  Mangles: X, r16, r19, r20, r21*/
+  Mangles: Z, r16, r19, r20, r21*/
 spi_op:
 			cbi PORTA,CSN
 spi_byte:		ldi r20,7
-			ld r19,X
+			ld r19,Z
 spi_bit:		in r21,PINA
 			andi r21,(1<<MISO)
 			neg r21
@@ -424,7 +514,7 @@ spi_clear:		sbi PORTA,SCK
 			cbi PORTA,SCK
 			dec r20
 			brpl spi_bit
-			st X+,r19
+			st Z+,r19
 			dec r16
 			brpl spi_byte
 spi_done:		sbi PORTA,CSN
