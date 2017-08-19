@@ -11,8 +11,8 @@
 /*
   Reg summary
 
-  r0, all interrupt handlers (saves SREG)
-  r1, 
+  r0, mainloop
+  r1, mainloop 
   r2, 
   r3, 
   r4, 
@@ -31,9 +31,9 @@
   r17,
   r18, mainloop
   r19, mainloop, spi_op
-  r20, spi_op
-  r21, spi_op
-  r22, all interrupt handlers (work reg)
+  r20, mainloop, spi_op
+  r21, mainloop, spi_op
+  r22,
   r23,
   r24, 
   r25, 
@@ -121,8 +121,12 @@
 .ORG 0x60
                 .BYTE 47
 stack:		.BYTE 1
+page_buffer:    .BYTE 64
+.ORG 0xDE
                 .BYTE 1
 bufferc:	.BYTE 32
+.ORG 0x100
+userspace:      .BYTE 1
 
 .CSEG
                         ;Interrupt vectors
@@ -145,10 +149,10 @@ bufferc:	.BYTE 32
 			rjmp   USI_OVF_H        ; USI Overflow Handler
 
                         ;RF recieve pipe widths
-PW_TABLE:               .DB 32,1,1,1,1
+PW_TABLE:               .DB 16,8,32,2,1
 
                         ;RF receive pipe callback vectors
-PIPE_CB_VECT:           rjmp   INIT
+PIPE_CB_VECT:           rjmp   SETUP
                         rjmp   PIPE1_CB
                         rjmp   PIPE2_CB
                         rjmp   PIPE3_CB
@@ -174,11 +178,11 @@ USI_OVF_H:        ; USI Overflow Handler
 			reti
 
 PIPE1_CB:               sbi PORTA,LEDB1
-                        sbi PORTA,LEDB2
+                        cbi PORTA,LEDB2
                         cbi PORTA,LEDG1
                         cbi PORTA,LEDG2
                         cbi PORTB,LEDR1
-                        cbi PORTB,LEDR2
+                        sbi PORTB,LEDR2
                         ret
 PIPE2_CB:               sbi PORTA,LEDB1
                         sbi PORTA,LEDB2
@@ -208,9 +212,12 @@ PIPE5_CB:               cbi PORTA,LEDB1
                         cbi PORTB,LEDR1
                         sbi PORTB,LEDR2
                         ret
-
-
-INIT:
+SETUP:                  sbi PORTA,LEDB1
+                        sbi PORTA,LEDB2
+                        cbi PORTA,LEDG1
+                        cbi PORTA,LEDG2
+                        cbi PORTB,LEDR1
+                        cbi PORTB,LEDR2
                         ret
 
 
@@ -259,32 +266,53 @@ RESET_H:
 			ldi r16, (1<<IRQ_PCINT)
 			out IRQ_PCMSKREG, r16
 
+                        ldi r30, bufferc
+                        ldi r16, FLUSH_TX
+                        st  -Z,r16
+                        ldi r16,0
+                        rcall spi_op
+
+                        ldi r30, bufferc
+                        ldi r16, FLUSH_RX
+                        st  -Z,r16
+                        ldi r16,0
+                        rcall spi_op
+
+                        ldi r30, bufferc
+			ldi r16, 0b01110000	;IRQs to clear
+			st Z,r16
+			ldi r16, W_REGISTER + STATUS
+			st -Z,r16
+			ldi r16,1
+			rcall spi_op
+
 			ldi r30, bufferc-1
 			ldi r16, R_REGISTER + RX_ADDR_P0
 			st Z,r16
 			ldi r16,5
 			rcall spi_op
 
-
-                        sbi PORTB,LEDR1
-                        sbi PORTB,LEDR2
-                        sbi PORTA,LEDG1
-                        sbi PORTA,LEDG2
+                        cbi PORTA,LEDB1
+                        cbi PORTA,LEDB2
+                        cbi PORTA,LEDG1
+                        cbi PORTA,LEDG2
+                        cbi PORTB,LEDR1
+                        cbi PORTB,LEDR2
 			ldi r28, bufferc-1
 			ld r16,Y+
 			cpi r16,0b00001110
 			brne funkfail
+                        sbi PORTA,LEDG1
 			ldi r23,5
 funkcheckloop:		ld r16,Y+
 			cpi r16,0xE7
-			brne funkfail
+			brne funkunclean
 			dec r23
 			brne funkcheckloop
-                        cbi PORTB,LEDR1
-                        cbi PORTB,LEDR2
+                        sbi PORTA,LEDG2
                         rjmp funkok
-funkfail:		cbi PORTA,LEDG1
-                        cbi PORTA,LEDG2
+funkfail:		sbi PORTB,LEDR1
+funkunclean:            sbi PORTB,LEDR2
 funkok:
 
 			ldi r30,bufferc
@@ -343,7 +371,6 @@ eereadloop:		out EEARL,r16		;read rf-parameters stored on the eeprom
 			rcall spi_op
 
 
-
                         ldi r30, bufferc
 			ldi r16,32		        ;set control pipe length
 			st Z,r16
@@ -351,17 +378,6 @@ eereadloop:		out EEARL,r16		;read rf-parameters stored on the eeprom
 			st -Z,r16
 			ldi r16,1
 			rcall spi_op
-
-/*
-                        ldi r30, bufferc
-			ldi r16,32		        ;set control pipe length
-			st Z,r16
-			ldi r16, W_REGISTER + RX_PW_P1
-			st -Z,r16
-			ldi r16,1
-			rcall spi_op
-*/
-
 
                         ldi r30,PW_TABLE<<1
                         lpm r16,Z
@@ -408,7 +424,6 @@ eereadloop:		out EEARL,r16		;read rf-parameters stored on the eeprom
 			ldi r16,1
 			rcall spi_op
 
-
 			ldi r30, bufferc
 			ldi r16, 0b00001011	;set rf-module to power-on and RX mode
 			st Z,r16
@@ -431,8 +446,9 @@ FOREVER:	        sleep
 			sbic PINB,IRQ
 			rjmp FOREVER
 
-rf_op:                  ldi r16, RF_NOP  ;read status to get the current pipe number
+rf_op:                  ldi r31,0x00
                         ldi r30, bufferc
+                        ldi r16, RF_NOP  ;read status to get the current pipe number
                         st  -Z,r16
                         clr r16
                         rcall spi_op   ;leaves the last byte read on r19, no need to ld from mem
@@ -453,6 +469,7 @@ rf_op:                  ldi r16, RF_NOP  ;read status to get the current pipe nu
 			st  -Z,r19
 			rcall spi_op
 
+                        ldi r31,0x00
                         ldi r30,PIPE_CB_VECT
                         add r30,r18
                         icall
@@ -474,19 +491,137 @@ control_command:
 			ldi r16,32              ;pipe width
                         rcall spi_op
 
-                        cbi PORTA,LEDG1
-                        cbi PORTA,LEDG2
-                        cbi PORTA,LEDB1
-                        cbi PORTA,LEDB2
-                        cbi PORTB,LEDR1
-                        cbi PORTB,LEDR2
-                        sbrs r19,0
-                        sbi PORTB,LEDR2
+                        ldi r31,0x00
+                        ldi r30,bufferc
+                        ld  r16,Z+
 
+                        cpi r16, 0x00
+                        breq force_reset
+                        cpi r16, 0x01
+                        breq load_page
+                        cpi r16, 0x02
+                        breq write_buffer
+                        cpi r16, 0x03
+                        breq program_page
+                        cpi r16, 0x04
+                        breq program_eeprom
                         rjmp clear_irq
 
 
+force_reset:
+                        cli
+                        ldi r16, (0<<WDIF|0<<WDIE|0<<WDP3|1<<WDCE|1<<WDE|0<<WDP2|0<<WDP1|0<<WDP0)
+                        out WDTCSR, r16
+                        ldi r16, (0<<WDIF|0<<WDIE|0<<WDP3|0<<WDCE|1<<WDE|1<<WDP2|1<<WDP1|0<<WDP0)
+                        out WDTCSR, r16
+                        sbi PORTA,LEDB1
+                        sbi PORTA,LEDB2
+                        cbi PORTA,LEDG1
+                        cbi PORTA,LEDG2
+                        cbi PORTB,LEDR1
+                        cbi PORTB,LEDR2
+block:                  nop
+                        rjmp block
 
+
+write_buffer:
+                        ld  r18,Z+
+                        ld  r19,Z+
+                        andi r18,0x3F
+                        andi r19,0x0F
+                        subi r18,-page_buffer
+                        add r19,r18
+                        cpi r19,page_buffer+0x40
+                        brcs buffer_write_loop
+                        ldi r19,page_buffer+0x3F
+buffer_write_loop:      ld  r16,Z+
+                        mov r20,r30
+                        mov r30,r18
+                        st  Z+,r16
+                        mov r18,r30
+                        mov r30,r20
+                        cp  r19,r18
+                        brcc buffer_write_loop
+                        rjmp clear_irq
+
+
+program_eeprom:
+                        rjmp clear_irq
+
+
+load_page:
+                        ld  r16,Z
+                        andi r16,0x3F
+                        ldi r31,0x00
+                        mov r30,r16
+                        ldi r16,6
+l_page_mul:             lsl r30
+                        rol r31
+                        dec r16
+                        brne l_page_mul
+                        ldi r16,64
+page_load_loop:         lpm r18, Z
+                        push r31
+                        push r30
+                        ldi r31,0x00
+                        andi r30,0x3F
+                        subi r30,-page_buffer
+                        st  Z,r18
+                        pop r30
+                        pop r31
+                        inc r30
+                        dec r16
+                        brne page_load_loop
+                        ldi r31,0x00
+                        rjmp clear_irq
+
+
+program_page:
+                        cli
+                        push r28
+                        push r29
+                        ldi r29,0x00
+                        ldi r28,page_buffer
+                        ld  r16,Z
+                        andi r16,0x3F
+                        ldi r31,0x00
+                        mov r30,r16
+                        ldi r16,6
+p_page_mul:             lsl r30
+                        rol r31
+                        dec r16
+                        brne p_page_mul
+                        ldi r16,32
+                        ldi r18,0x01
+page_program_loop:      ld  r0,Y+
+                        ld  r1,Y+
+                        out SPMCSR,r18
+                        spm
+                        subi r30,-2
+                        dec r16
+                        brne page_program_loop
+f_erase_wait:           in  r18,SPMCSR
+                        sbrc r18,SPMEN
+                        rjmp f_erase_wait
+                        andi r30,0xC0
+                        ldi r18,0x03
+                        out SPMCSR,r18
+                        spm                        
+f_prog_wait:            in  r18,SPMCSR
+                        sbrc r18,SPMEN
+                        rjmp f_prog_wait
+                        andi r30,0xC0
+                        ldi r18,0x05
+                        out SPMCSR,r18
+                        spm                        
+f_ready_wait:           in  r18,SPMCSR
+                        sbrc r18,SPMEN
+                        rjmp f_ready_wait
+                        ldi r31,0x00
+                        pop  r29
+                        pop  r28
+                        sei
+                        rjmp clear_irq
 
 
 /*SPI operations subroutine
